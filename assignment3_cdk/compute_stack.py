@@ -1,5 +1,7 @@
 from aws_cdk import (
     Stack,
+    BundlingOptions,
+    DockerImage,
     aws_lambda as _lambda,
     aws_s3 as s3,
     aws_dynamodb as dynamodb,
@@ -23,14 +25,28 @@ class ComputeStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         # ==============================
-        # Plotting Lambda
+        # Plotting Lambda (Docker bundles matplotlib for Lambda/Linux)
+        # Requires: Docker running when you run cdk deploy
         # ==============================
         self.plotting_lambda = _lambda.Function(
             self,
             "PlottingLambda",
             runtime=_lambda.Runtime.PYTHON_3_12,
             handler="handler.lambda_handler",
-            code=_lambda.Code.from_asset("lambda_src/plotting"),
+            architecture=_lambda.Architecture.ARM_64,  # Match Docker on Apple Silicon (aarch64)
+            code=_lambda.Code.from_asset(
+                "lambda_src/plotting",
+                bundling=BundlingOptions(
+                    image=DockerImage.from_registry(
+                        "public.ecr.aws/sam/build-python3.12:latest"
+                    ),
+                    command=[
+                        "bash",
+                        "-c",
+                        "pip install -r /asset-input/requirements.txt -t /asset-output && cp /asset-input/handler.py /asset-output/",
+                    ],
+                ),
+            ),
             timeout=Duration.seconds(60),
         )
 

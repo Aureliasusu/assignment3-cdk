@@ -8,3 +8,8 @@ __pycache__
 # CDK asset staging directory
 .cdk.staging
 cdk.out
+
+# Plotting Lambda pip-installed deps (run scripts/bundle_plotting_lambda.sh before deploy)
+lambda_src/plotting/*
+!lambda_src/plotting/handler.py
+!lambda_src/plotting/requirements.txt
