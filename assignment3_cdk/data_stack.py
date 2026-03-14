@@ -2,8 +2,11 @@ from constructs import Construct
 from aws_cdk import (
     Stack,
     RemovalPolicy,
+    Duration,
     aws_s3 as s3,
+    aws_s3_notifications as s3n,
     aws_dynamodb as dynamodb,
+    aws_lambda as _lambda,
 )
 
 
@@ -45,4 +48,25 @@ class DataStack(Stack):
                 name="total_size",
                 type=dynamodb.AttributeType.NUMBER,
             ),
+        )
+
+        # Size-tracking Lambda (same stack as bucket to avoid circular dependency)
+        self.size_tracking_lambda = _lambda.Function(
+            self,
+            "SizeTrackingLambda",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            handler="handler.lambda_handler",
+            code=_lambda.Code.from_asset("lambda_src/size_tracking"),
+            timeout=Duration.seconds(60),
+        )
+        self.size_tracking_lambda.add_environment("BUCKET_NAME", self.bucket.bucket_name)
+        self.size_tracking_lambda.add_environment("TABLE_NAME", self.table.table_name)
+        self.size_tracking_lambda.add_environment("REGION", self.region)
+        self.bucket.grant_read(self.size_tracking_lambda)
+        self.table.grant_write_data(self.size_tracking_lambda)
+
+        # S3 event: bucket -> size-tracking lambda (OBJECT_CREATED)
+        self.bucket.add_event_notification(
+            s3.EventType.OBJECT_CREATED,
+            s3n.LambdaDestination(self.size_tracking_lambda),
         )
